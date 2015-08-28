@@ -1,0 +1,104 @@
+* kilgore
+
+  [[doc/kilgore.png]]
+
+  A very basic event sourcing library.
+
+** Installation
+
+   Add the following to your ~:dependencies~:
+
+   #+BEGIN_SRC clojure
+[kilgore "0.1.0"]
+   #+END_SRC
+
+** Usage
+
+   Setup a store and a stream; a store is responsible for keeping your
+   events safe and a stream aggregates events closely related to each
+   other.
+
+   #+BEGIN_SRC clojure
+(require '[kilgore.store :as store])
+(require '[kilgore.stream :as stream)
+
+(def store (store/acquire {:store-atom (atom nil)}))
+(def stream (stream/acquire store "Slate Rock and Gravel Company"))
+   #+END_SRC
+
+   Next we'll define some events.  Please notice the use of past
+   tense; we will be recording events which have already happened.
+
+   #+BEGIN_SRC clojure
+(require '[kilgore.event :refer [defevent]])
+
+(defevent employee-hired [id name])
+(defevent employee-promoted [id])
+(defevent employee-demoted [id])
+(defevent employee-left [id])
+   #+END_SRC
+
+   Now we can record events.
+
+   #+BEGIN_SRC clojure
+(require '[kilgore.stream :refer [record-event!]])
+
+(record-event! stream (->EmployeeHired "fred" "Fred Flintstone"))
+(record-event! stream (->EmployeeHired "barney" "Barney Rubble"))
+(record-event! stream (->EmployeePromoted "fred"))
+(record-event! stream (->EmployeeLeft "barney"))
+   #+END_SRC
+
+   To access our our current data set, we'll write an event handler.
+   In this case we're interested in making a map of employees, record
+   their employment level and count how many times employees where
+   hired.
+
+   #+BEGIN_SRC clojure
+(require '[kilgore.stream :refer [event-reducer]])
+
+(defmulti handle-event (fn [_ event (type event)])
+(defmethod handle-event :default [state _] state)
+
+(defmethod handle-event employee-hired
+   [state {:keys [id name]}]
+   (-> state
+       (assoc-in [:employees id] {:name name})
+       (update-in [:total-hires] (fnil inc 0))))
+
+(defmethod handle-event employee-promoted
+   [state {:keys [id]}]
+   (update-in state [:employees id :level] (fnil inc 0)))
+
+(defmethod handle-event employee-demoted
+   [state {:keys [id]}]
+   (update-in state [:employees id :level] (fnil dec 0)))
+
+(defmethod handle-event employee-left
+   [state {:keys [id]}]
+   (update-in state [:employees] dissoc id))
+
+(def current (event-reducer handle-event))
+   #+END_SRC
+
+   Let's see what the current state of our company is given the events
+   we recorded earlier.
+
+   #+BEGIN_SRC clojure
+(current stream)
+;; => {:employees {"fred" {:name "Fred Flintstone", :level 1}}, :total-hires 2}
+   #+END_SRC
+
+   That's it!
+
+** Issues
+
+   This library does not provide a locking mechanism to ensure a
+   consistent data set for things like uniqueness constraints.
+
+** License
+
+Copyright © 2015 R.W. van 't Veer
+
+Distributed under the Eclipse Public License either version 1.0 or (at
+your option) any later version.
