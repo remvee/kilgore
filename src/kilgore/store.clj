@@ -36,7 +36,8 @@
   (stream-ids [this]
     (->> @(:store-atom opts)
          keys
-         (map (partial ->stream-id this))))
+         (map (partial ->stream-id this))
+         set))
 
   (delete! [this stream-id]
     (swap! (:store-atom opts)
@@ -78,9 +79,10 @@
           (car/llen (->stream-key this stream-id))))
 
   (stream-ids [this]
-    (map (partial ->stream-id this)
-         (wcar (:connection opts)
-               (car/keys (->stream-key this "*")))))
+    (->> (wcar (:connection opts)
+               (car/keys (->stream-key this "*")))
+         (map (partial ->stream-id this))
+         set))
 
   (delete! [this stream-id]
     (wcar (:connection opts)
