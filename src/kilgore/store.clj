@@ -9,7 +9,8 @@
   (record-event! [_ stream-id event])
   (version [_ stream-id])
   (stream-ids [_])
-  (delete! [_ stream-id]))
+  (delete! [_ stream-id])
+  (rename! [_ stream-id new-stream-id]))
 
 (defrecord AtomStore [opts]
   IStore
@@ -41,7 +42,15 @@
 
   (delete! [this stream-id]
     (swap! (:store-atom opts)
-           dissoc (->stream-key this stream-id))))
+           dissoc (->stream-key this stream-id)))
+
+  (rename! [this stream-id new-stream-id]
+    (swap! (:store-atom opts)
+           (fn [v]
+             (-> v
+                 (assoc (->stream-key this new-stream-id)
+                        (get v (->stream-key this stream-id)))
+                 (dissoc (->stream-key this stream-id)))))))
 
 (defrecord CarmineStore [opts]
   IStore
@@ -86,7 +95,12 @@
 
   (delete! [this stream-id]
     (wcar (:connection opts)
-          (car/del (->stream-key this stream-id)))))
+          (car/del (->stream-key this stream-id))))
+
+  (rename! [this stream-id new-stream-id]
+    (wcar (:connection opts)
+          (car/rename (->stream-key this stream-id)
+                       (->stream-key this new-stream-id)))))
 
 (defn acquire [{:keys [type] :or {type :atom}
                 :as opts}]
