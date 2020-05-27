@@ -20,7 +20,7 @@
 
    #+BEGIN_SRC clojure
 (require '[kilgore.store :as store])
-(require '[kilgore.stream :as stream)
+(require '[kilgore.stream :as stream])
 
 (def store (store/acquire {:store-atom (atom nil)}))
 (def stream (stream/acquire store "Slate Rock and Gravel Company"))
@@ -57,7 +57,7 @@
    #+BEGIN_SRC clojure
 (require '[kilgore.stream :refer [event-reducer]])
 
-(defmulti handle-event (fn [_ event (type event)])
+(defmulti handle-event (fn [_ event] (type event)))
 (defmethod handle-event :default [state _] state)
 
 (defmethod handle-event employee-hired
