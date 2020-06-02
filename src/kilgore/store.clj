@@ -2,6 +2,11 @@
   (:require [taoensso.carmine :as car :refer [wcar]])
   (:import (java.util Date)))
 
+(defn- tstamp [event]
+  (if (:tstamp event)
+    event
+    (assoc event :tstamp (Date.))))
+
 (defprotocol IStore
   (->stream-key [_ stream-id])
   (->stream-id [_ stream-key])
@@ -27,7 +32,7 @@
     (drop offset (get @(:store-atom opts) (->stream-key this stream-id))))
 
   (record-event! [this stream-id event]
-    (let [event (if (:tstamp event) event (assoc event :tstamp (Date.)))]
+    (let [event (tstamp event)]
       (swap! (:store-atom opts)
              update-in [(->stream-key this stream-id)] #((fnil conj []) % event))))
 
@@ -79,7 +84,7 @@
         chunk)))
 
   (record-event! [this stream-id event]
-    (let [event (if (:tstamp event) event (assoc event :tstamp (Date.)))]
+    (let [event (tstamp event)]
       (wcar (:connection opts)
             (car/rpush (->stream-key this stream-id) event))))
 
