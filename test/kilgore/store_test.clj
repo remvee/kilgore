@@ -1,17 +1,42 @@
 (ns kilgore.store-test
-  (:require [clojure.test :refer [deftest is testing]]
-            [kilgore.store :as store]))
+  (:require [clojure.java.io :as io]
+            [clojure.test :refer [deftest is testing use-fixtures]]
+            [kilgore.store :as store]
+            [taoensso.carmine :as car])
+  (:import java.nio.file.attribute.FileAttribute
+           java.nio.file.Files))
+
+(def ^:dynamic *temp-dir* nil)
+
+(defn- rmdir-rf [dir]
+  (doseq [f (-> dir io/file file-seq reverse)]
+    (.delete f)))
+
+(use-fixtures :each
+  (fn with-temp-dir [f]
+    (binding [*temp-dir* (str (Files/createTempDirectory "kilgore-test" (make-array FileAttribute 0)))]
+      (f)
+      (rmdir-rf *temp-dir*))))
+
+(defn store-opts []
+  (let [opts [{:type :atom, :store-atom (atom nil)}
+              {:type :file, :store-dir *temp-dir*}]]
+    (try
+      (car/wcar {} (car/keys "test"))
+      (conj opts {:type :carmine})
+      (catch Exception _
+        (prn "WARNING! Skipping carmine tests!")
+        opts))))
 
 (deftest basic
-  (doseq [opts [{:type :atom, :store-atom (atom nil)}
-                {:type :carmine}]]
+  (doseq [opts (store-opts)]
     (testing (:type opts)
-      (let [store (store/acquire opts)
+      (let [store   (store/acquire opts)
             cleanup (fn [& ids] (doseq [id ids] (store/delete! store id)))]
         (testing "record-event!"
           (cleanup "test")
 
-          (is (= 0 (store/version store "test")))
+          (is (zero? (store/version store "test")))
           (store/record-event! store "test" {:test "first"})
           (store/record-event! store "test" {:test "second"})
           (is (= 2 (store/version store "test")))
@@ -32,5 +57,5 @@
           (store/record-event! store "test:1" {:test "first"})
           (store/rename! store "test:1" "test:2")
 
-          (is (= 0 (store/version store "test:1")))
+          (is (zero? (store/version store "test:1")))
           (is (= 1 (store/version store "test:2"))))))))

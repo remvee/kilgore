@@ -1,6 +1,8 @@
 (ns kilgore.store
-  (:require [taoensso.carmine :as car :refer [wcar]])
-  (:import (java.util Date)))
+  (:require [clojure.java.io :as io]
+            [clojure.string :as s]
+            [taoensso.carmine :as car :refer [wcar]])
+  (:import java.util.Date))
 
 (defn- tstamp [event]
   (if (:tstamp event)
@@ -57,6 +59,50 @@
                         (get v (->stream-key this stream-id)))
                  (dissoc (->stream-key this stream-id)))))))
 
+(defn ->safe-filename [v]
+  (s/replace v #"(?i)[^a-z0-9]" (fn [x] (str "_" (int (.charAt x 0)) "_"))))
+
+(defn <-safe-filename [v]
+  (s/replace v #"_(\d+)_" (fn [[_ x]] (str (char (Long/parseLong x))))))
+
+(defrecord FileStore [opts]
+  IStore
+
+  (->stream-key [_ stream-id]
+    (.mkdirs (io/file (:store-dir opts)))
+    (io/file (:store-dir opts) (->safe-filename stream-id)))
+
+  (->stream-id [_ stream-id] stream-id)
+
+  (events [_ stream-id] (events _ stream-id {}))
+
+  (events [this stream-id {:keys [offset] :or {offset 0}}]
+    (let [f (->stream-key this stream-id)]
+      (when (.exists f)
+        (drop offset (->> f (io/reader) line-seq (map read-string))))))
+
+  (record-event! [this stream-id event]
+    (let [event (tstamp event)]
+      (binding [*out* (io/writer (->stream-key this stream-id) :append true)]
+        (prn event))))
+
+  (version [this stream-id]
+    (let [f (->stream-key this stream-id)]
+      (if (.exists f)
+        (count (line-seq (io/reader f)))
+        0)))
+
+  (stream-ids [_]
+    (let [dir (io/file (:store-dir opts))]
+      (set (map #(<-safe-filename (.getName %)) (.listFiles dir)))))
+
+  (delete! [this stream-id]
+    (.delete (->stream-key this stream-id)))
+
+  (rename! [this stream-id new-stream-id]
+    (.renameTo (->stream-key this stream-id)
+               (->stream-key this new-stream-id))))
+
 (defrecord CarmineStore [opts]
   IStore
 
@@ -105,11 +151,15 @@
   (rename! [this stream-id new-stream-id]
     (wcar (:connection opts)
           (car/rename (->stream-key this stream-id)
-                       (->stream-key this new-stream-id)))))
+                      (->stream-key this new-stream-id)))))
 
 (defn acquire [{:keys [type] :or {type :atom}
                 :as opts}]
-  {:pre [(or (not= type :atom) (contains? opts :store-atom))]}
+  {:pre [(case type
+           :atom (contains? opts :store-atom)
+           :file (contains? opts :store-dir)
+           true)]}
   (case type
+    :file (->FileStore opts)
     :atom (->AtomStore opts)
     :carmine (->CarmineStore opts)))
