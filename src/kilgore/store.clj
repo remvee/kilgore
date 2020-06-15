@@ -79,7 +79,8 @@
   (events [this stream-id {:keys [offset] :or {offset 0}}]
     (let [f (->stream-key this stream-id)]
       (when (.exists f)
-        (drop offset (->> f (io/reader) line-seq (map read-string))))))
+        (map read-string
+             (->> f (io/reader) line-seq (drop offset))))))
 
   (record-event! [this stream-id event]
     (let [event (tstamp event)]
