@@ -9,7 +9,7 @@
    Add the following to your ~:dependencies~:
 
    #+BEGIN_SRC clojure
-[kilgore "0.1.0"]
+[kilgore "0.2.0"]
    #+END_SRC
 
 ** Usage
