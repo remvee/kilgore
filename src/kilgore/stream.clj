@@ -19,12 +19,13 @@
 (defn event-reducer [handle-event]
   (let [cache-atom (atom {})]
     (fn [stream]
-      (-> cache-atom
-          (swap! update-in [stream]
-                 #(reduce (fn [state event]
-                            (-> state
-                                (update-in [:current] handle-event event)
-                                (update-in [:version] (fnil inc 0))))
-                          %
-                          (events stream {:offset (get % :version 0)})))
-          (get-in [stream :current])))))
+      (locking stream
+        (-> cache-atom
+            (swap! update-in [stream]
+                   #(reduce (fn [state event]
+                              (-> state
+                                  (update-in [:current] handle-event event)
+                                  (update-in [:version] (fnil inc 0))))
+                            %
+                            (events stream {:offset (get % :version 0)})))
+            (get-in [stream :current]))))))
