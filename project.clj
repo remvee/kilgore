@@ -1,4 +1,4 @@
-(defproject kilgore "0.2.0"
+(defproject kilgore "0.2.1"
   :description "A very basic event sourcing library."
   :url "https://github.com/remvee/kilgore"
   :license {:name "Eclipse Public License"
